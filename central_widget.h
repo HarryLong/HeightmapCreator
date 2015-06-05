@@ -9,6 +9,7 @@
 
 enum HeightMapFormElements{
     HEIGHTMAP_FILE,
+    BIT_DEPTH,
     POINTS_X,
     POINTS_Y,
     MIN_HEIGHT,
@@ -17,9 +18,10 @@ enum HeightMapFormElements{
 
 enum TerragenFormElements{
     BASE_HEIGHT,
-    SCALE,
+    ACTUAL_SIZE,
     PLANET_RADIUS,
     MODE,
+    HEIGHT_SCALE,
 };
 
 class QPushButton;
@@ -48,11 +50,12 @@ private:
     float get_scale();
     float get_planet_radius();
     int get_mode();
+    float get_height_scale();
 
     std::map<HeightMapFormElements, FormRow*> m_heightmap_form_elements;
     std::map<TerragenFormElements, FormRow*> m_terragen_form_elements;
     QPushButton * m_create_btn;
-    DecodedGreyScalePNGFile m_decoded_png_file;
+    DecodedGreyScalePNGFile * m_decoded_png_file;
     TerragenFile m_parsed_terragen_file;
 };
 

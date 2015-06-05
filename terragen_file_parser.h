@@ -7,7 +7,7 @@
 
 namespace TerragenFileParser {
     bool parse(const DecodedGreyScalePNGFile & decoded_png_file, unsigned short base_height, float scale, float planet_radius, int mode,
-               const std::string & filename);
+               const std::string & filename, float height_scale = 1.0f);
 
     float meters_to_terrain_units(unsigned short distance_in_meters, float scale);
 }

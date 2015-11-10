@@ -5,22 +5,29 @@
 #include <QtWidgets>
 #include "lodepng/lodepng.h"
 #include "terragen_file_parser.h"
+#include "terragen_heightmap_wrapper.h"
+#include "img_file.h"
 
-CentralWidget::CentralWidget(QWidget * parent, Qt::WindowFlags f) : QWidget(parent, f)
+CentralWidget::CentralWidget(QWidget * parent, Qt::WindowFlags f) : QWidget(parent, f),
+    m_heightmap(nullptr), m_filetype(FileType::PNG)
 {
     // Heightmap form elements
     m_heightmap_form_elements[HEIGHTMAP_FILE] = new FormRow("File:", true, "Load");
+    m_heightmap_form_elements[FILE_TYPE] = new FormRow("File type:");
     m_heightmap_form_elements[BIT_DEPTH] = new FormRow("Bit depth:");
-    m_heightmap_form_elements[POINTS_X] = new FormRow("Points (X):");
-    m_heightmap_form_elements[POINTS_Y] = new FormRow("Points (Y):");
+    m_heightmap_form_elements[WIDTH] = new FormRow("Width:");
+    m_heightmap_form_elements[HEIGHT] = new FormRow("Height:");
     m_heightmap_form_elements[MIN_HEIGHT] = new FormRow("Minimum height (m):");
     m_heightmap_form_elements[MAX_HEIGHT] = new FormRow("Maximum height (m):");
     // Terragen form elements
-    m_terragen_form_elements[BASE_HEIGHT] = m_terragen_form_elements[BASE_HEIGHT] = new FormRow("Base height (m) (optional):");
-    m_terragen_form_elements[ACTUAL_SIZE] = m_terragen_form_elements[ACTUAL_SIZE] = new FormRow("Actual size (m):");
-    m_terragen_form_elements[PLANET_RADIUS] = m_terragen_form_elements[PLANET_RADIUS] = new FormRow("Planet Radius (optional):");
-    m_terragen_form_elements[MODE] = m_terragen_form_elements[MODE] = new FormRow("Mode (optional):");
-    m_terragen_form_elements[HEIGHT_SCALE] = m_terragen_form_elements[HEIGHT_SCALE] = new FormRow("Height Scale (optional):");
+    m_terragen_form_elements[BASE_HEIGHT] = new FormRow("Base height (m) (optional):");
+    m_terragen_form_elements[ACTUAL_SIZE] = new FormRow("Actual size (m):");
+    m_terragen_form_elements[PLANET_RADIUS] = new FormRow("Planet Radius (optional):");
+    m_terragen_form_elements[MODE] = new FormRow("Mode (optional):");
+    m_terragen_form_elements[HEIGHT_SCALE] = new FormRow("Height Scale (optional):");
+    m_terragen_form_elements[REPRODUCE_WIDTH] = new FormRow("Width (optional):");
+    m_terragen_form_elements[REPRODUCE_HEIGHT] = new FormRow("Height (optional):");
+
     m_create_btn = new QPushButton("Create terragen file");
 
     init_layout();
@@ -30,7 +37,13 @@ CentralWidget::CentralWidget(QWidget * parent, Qt::WindowFlags f) : QWidget(pare
 
 CentralWidget::~CentralWidget()
 {
+    delete_files();
+}
 
+void CentralWidget::delete_files()
+{
+    if(m_heightmap != nullptr)
+        delete m_heightmap;
 }
 
 void CentralWidget::init_layout()
@@ -85,7 +98,7 @@ void CentralWidget::launch_heightmap_loader()
     QString filename ( QFileDialog::getOpenFileName(this,
                                                     tr("Select heightmap image"),
                                                     QDir::homePath(),
-                                                    tr("PNG files (*.png)"),
+                                                    tr("Heightmaps (*.ter *.png *.img)"),
                                                     &selectedFilter,
                                                     options));
 
@@ -93,29 +106,41 @@ void CentralWidget::launch_heightmap_loader()
     {
         std::vector<unsigned char> image; //the raw pixels
         unsigned int width, height, error;
-        lodepng::State state;
-
-        // Decode PNG file
+        if(filename.endsWith(".png", Qt::CaseSensitivity::CaseInsensitive)) // PNG FILE
         {
+            m_filetype = FileType::PNG;
+            lodepng::State state;
             state.decoder.color_convert = 0;
             std::vector<unsigned char> png;
             lodepng::load_file(png, filename.toStdString()); //load the image file with given filename
             error = lodepng::decode(image, width, height, state, png);
+            if(error)
+                std::cerr << "decoder error " << error << ": " << lodepng_error_text(error) << std::endl;
+            else
+            {
+                DecodedGreyScalePNGFile::GrayScaleMode mode (state.info_png.color.bitdepth == 8 ? DecodedGreyScalePNGFile::GrayScaleMode::_8_BIT :
+                                                                                                    DecodedGreyScalePNGFile::GrayScaleMode::_16_BIT);
+                m_heightmap = new DecodedGreyScalePNGFile(image, width, height, mode);
+            }
+        }
+        else if(filename.endsWith(".img", Qt::CaseSensitivity::CaseInsensitive)) // IMG FILE
+        {
+            m_filetype = FileType::IMG;
+            m_heightmap = new ImgFile(filename);
+            error = (m_heightmap->width() != -1  && m_heightmap->height() != 0) ? 0 : -1;
+        }
+        else if(filename.endsWith(".ter", Qt::CaseSensitivity::CaseInsensitive)) // TERRAGEN FILE
+        {
+            m_filetype = FileType::TER;
+            m_heightmap = new TerragenHeightmapWrapper(filename);
+            error = (m_heightmap->width() != -1  && m_heightmap->height() != 0) ? 0 : -1;
         }
 
-        //if there's an error, display it
-        if(!error)
-        {
-            DecodedGreyScalePNGFile::GrayScaleMode mode (state.info_png.color.bitdepth == 8 ? DecodedGreyScalePNGFile::GrayScaleMode::_8_BIT :
-                                                                                                DecodedGreyScalePNGFile::GrayScaleMode::_16_BIT);
-            m_decoded_png_file = new DecodedGreyScalePNGFile(image, width, height, mode);
-            valid_heightmap_loaded(filename);
-        }
-        else // Disable editable widgets
-        {
-            std::cerr << "decoder error " << error << ": " << lodepng_error_text(error) << std::endl;
+
+        if(error)
             invalid_heightmap_loaded();
-        }
+        else
+            valid_heightmap_loaded(filename);
     }
 }
 
@@ -124,15 +149,16 @@ void CentralWidget::create_terragen_file()
 {
     QString filename ( QFileDialog::getSaveFileName(this,
                                                     tr("Save as"),
-                                                    QDir::homePath()) );
+                                                    QDir::homePath(),
+                                                    tr("TerragenFile (*.ter)")) );
 
     if(filename != QString::null)
     {
         if(!filename.endsWith(TER_FILE_EXTENSION))
             filename.append(TER_FILE_EXTENSION);
 
-        if(TerragenFileParser::parse(*m_decoded_png_file, get_base_height(), get_scale(), get_planet_radius(), get_mode(), filename.toStdString(),
-                                     get_height_scale()))
+        if(TerragenFileParser::parse(m_heightmap, get_base_height(), get_scale(), get_planet_radius(), get_mode(), filename.toStdString(),
+                                     get_width(), get_height(), get_height_scale()))
         {
             QMessageBox::information(this, "Success!", QString("Successfully created terragen file: ").append(filename), QMessageBox::Ok);
         }
@@ -147,18 +173,26 @@ void CentralWidget::valid_heightmap_loaded(QString filename)
 {
     enable_terragen_form_elements(true);
     m_heightmap_form_elements[HEIGHTMAP_FILE]->setContent(filename);
-    // Bit depth
+    if(m_filetype == FileType::PNG)// Bit depth
     {
-        DecodedGreyScalePNGFile::GrayScaleMode mode (m_decoded_png_file->getMode());
+        m_heightmap_form_elements[FILE_TYPE]->setContent("PNG");
+        DecodedGreyScalePNGFile * png_file = static_cast<DecodedGreyScalePNGFile*>(m_heightmap);
+        DecodedGreyScalePNGFile::GrayScaleMode mode (png_file->getMode());
         if(mode == DecodedGreyScalePNGFile::GrayScaleMode::_8_BIT )
             m_heightmap_form_elements[BIT_DEPTH]->setContent(QString::number(8));
         else // 16 bit
             m_heightmap_form_elements[BIT_DEPTH]->setContent(QString::number(16));
     }
-    m_heightmap_form_elements[POINTS_X]->setContent(QString::number(m_decoded_png_file->width()));
-    m_heightmap_form_elements[POINTS_Y]->setContent(QString::number(m_decoded_png_file->height()));
-    m_heightmap_form_elements[MIN_HEIGHT]->setContent(QString::number(m_decoded_png_file->min()->getHeight()));
-    m_heightmap_form_elements[MAX_HEIGHT]->setContent(QString::number(m_decoded_png_file->max()->getHeight()));
+    else
+    {
+        m_heightmap_form_elements[FILE_TYPE]->setContent("IMG");
+        m_heightmap_form_elements[BIT_DEPTH]->setContent("-");
+        m_heightmap_form_elements[BIT_DEPTH]->setContent("-");
+    }
+    m_heightmap_form_elements[WIDTH]->setContent(QString::number(m_heightmap->width()));
+    m_heightmap_form_elements[HEIGHT]->setContent(QString::number(m_heightmap->height()));
+    m_heightmap_form_elements[MIN_HEIGHT]->setContent(QString::number(m_heightmap->min()->getHeight()));
+    m_heightmap_form_elements[MAX_HEIGHT]->setContent(QString::number(m_heightmap->max()->getHeight()));
 }
 
 void CentralWidget::invalid_heightmap_loaded()
@@ -194,7 +228,7 @@ int CentralWidget::get_base_height()
 float CentralWidget::get_scale()
 {
     if(is_set(TerragenFormElements::ACTUAL_SIZE))
-       return (get_content(TerragenFormElements::ACTUAL_SIZE).toFloat()/m_decoded_png_file->width());
+       return (get_content(TerragenFormElements::ACTUAL_SIZE).toFloat()/m_heightmap->width());
 
     return DEFAULT_SCALE;
 }
@@ -224,5 +258,21 @@ float CentralWidget::get_height_scale()
        return get_content(TerragenFormElements::HEIGHT_SCALE).toFloat();
 
     return DEFAULT_HEIGHT_SCALE;
+}
+
+int CentralWidget::get_width()
+{
+    if(is_set(TerragenFormElements::REPRODUCE_WIDTH))
+       return get_content(TerragenFormElements::REPRODUCE_WIDTH).toInt();
+
+    return m_heightmap->width();
+}
+
+int CentralWidget::get_height()
+{
+    if(is_set(TerragenFormElements::REPRODUCE_HEIGHT))
+       return get_content(TerragenFormElements::REPRODUCE_HEIGHT).toInt();
+
+    return m_heightmap->width();
 }
 

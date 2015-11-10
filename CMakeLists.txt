@@ -21,13 +21,13 @@ link_directories(
     "lib/"
 )
 
-
 SET(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O2 -g -DGL_DEBUG -std=c++11")
 SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2 -std=c++11")
 SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -DGL_DEBUG -std=c++11")
-SET(CMAKE_BUILD_TYPE Debug)
+SET(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 #SET(CMAKE_VERBOSE_MAKEFILE true )
-SET(SOURCE_FILES main_window main central_widget form_row png_file terragen_file_parser lodepng/lodepng)
+SET(SOURCE_FILES main_window main central_widget form_row png_file terragen_file_parser img_file pixel heightmap_file utils
+terragen_heightmap_wrapper lodepng/lodepng)
 
 #add_subdirectory(lodepng)
 

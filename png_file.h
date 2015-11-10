@@ -2,31 +2,20 @@
 #define DECODED_PNG_FILE_H
 
 #include <vector>
-
-class Pixel{
-public:
-    Pixel(unsigned short intensity);
-
-    virtual float getHeight() const = 0;
-    unsigned short getIntensity() const;
-
-protected:
-    unsigned short m_intensity;
-};
+#include "pixel.h"
+#include "heightmap_file.h"
 
 class _8BitPixel : public Pixel {
 public:
     _8BitPixel(unsigned short intensity);
-    float getHeight() const;
 };
 
 class _16BitPixel : public Pixel {
 public:
     _16BitPixel(unsigned short intensity);
-    virtual float getHeight() const;
 };
 
-class DecodedGreyScalePNGFile {
+class DecodedGreyScalePNGFile : public HeightmapFile{
 public:
     enum GrayScaleMode {
         _8_BIT,
@@ -36,13 +25,7 @@ public:
     DecodedGreyScalePNGFile(const std::vector<unsigned char> & m_raw_data, int width, int height, GrayScaleMode mode = GrayScaleMode::_8_BIT);
     DecodedGreyScalePNGFile();
     ~DecodedGreyScalePNGFile();
-    Pixel * operator()(int x, int y) const;
 
-    int width() const;
-    int height() const;
-
-    Pixel * min() const;
-    Pixel * max() const;
 
     GrayScaleMode getMode();
 
@@ -52,10 +35,6 @@ private:
     void _8_bit_decode(const std::vector<unsigned char> & raw_data);
     void _16_bit_decode(const std::vector<unsigned char> & raw_data);
 
-    std::vector<Pixel*> m_decoded_data; // row_order
-    Pixel * m_p_min;
-    Pixel * m_p_max;
-    int m_width, m_height;
     GrayScaleMode m_mode;
 };
 
